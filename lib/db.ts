@@ -18,7 +18,8 @@ export async function initDb() {
       employees TEXT,
       years_existing TEXT,
       answers TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      deleted_at DATETIME DEFAULT NULL
     )
   `);
 }

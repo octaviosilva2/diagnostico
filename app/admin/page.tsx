@@ -35,6 +35,23 @@ export default function AdminPage() {
   const [error, setError] = useState(false);
   const [responses, setResponses] = useState<any[]>([]);
   const [selectedResponse, setSelectedResponse] = useState<any | null>(null);
+  const [view, setView] = useState<"active" | "trash">("active");
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  const fetchData = async () => {
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResponses(data.responses);
+      }
+    } catch (e) {}
+  };
 
   const checkAdmin = async () => {
     try {
@@ -56,11 +73,41 @@ export default function AdminPage() {
     }
   };
 
+  const moveToTrash = async (id: number) => {
+    try {
+      const res = await fetch(`/api/responses/${id}/trash`, { method: "PATCH" });
+      if (res.ok) {
+        setOpenMenuId(null);
+        await fetchData();
+      }
+    } catch (e) {}
+  };
+
+  const restoreFromTrash = async (id: number) => {
+    try {
+      const res = await fetch(`/api/responses/${id}/restore`, { method: "PATCH" });
+      if (res.ok) {
+        await fetchData();
+      }
+    } catch (e) {}
+  };
+
+  const permanentDelete = async (id: number) => {
+    try {
+      const res = await fetch(`/api/responses/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setConfirmDeleteId(null);
+        await fetchData();
+      }
+    } catch (e) {}
+  };
+
   const exportCSV = () => {
-    if (!responses.length) { alert("Nenhum dado para exportar."); return; }
+    const activeOnes = responses.filter(r => !r.deletedAt);
+    if (!activeOnes.length) { alert("Nenhum dado para exportar."); return; }
     
     const headers = Object.keys(LABELS);
-    const rows = responses.map(r => {
+    const rows = activeOnes.map(r => {
       return headers.map(k => {
         let val = "";
         if (["empresa", "nome", "produto", "tamanho", "tempo"].includes(k)) {
@@ -82,10 +129,13 @@ export default function AdminPage() {
     a.click();
   };
 
-  const todayStr = new Date().toLocaleDateString("pt-BR");
-  const todayCount = responses.filter(r => new Date(r.submittedAt).toLocaleDateString("pt-BR") === todayStr).length;
+  const activeResponses = responses.filter(r => !r.deletedAt);
+  const trashResponses = responses.filter(r => !!r.deletedAt);
 
-  const weekCount = responses.filter(r => {
+  const todayStr = new Date().toLocaleDateString("pt-BR");
+  const todayCount = activeResponses.filter(r => new Date(r.submittedAt).toLocaleDateString("pt-BR") === todayStr).length;
+
+  const weekCount = activeResponses.filter(r => {
     const date = new Date(r.submittedAt);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -127,85 +177,228 @@ export default function AdminPage() {
   return (
     <div style={{ background: "var(--bg)", fontFamily: "'DM Sans', sans-serif", minHeight: "100vh", padding: "48px 24px" }}>
       <div style={{ maxWidth: "960px", margin: "0 auto" }}>
-        <div className="admin-header">
-          <div>
-            <div className="intro-logo" style={{ marginBottom: "8px" }}>
-              <div className="intro-logo-dot" />
-              <span className="intro-logo-text">ADMIN</span>
+        
+        {view === "active" ? (
+          <>
+            <div className="admin-header">
+              <div>
+                <div className="intro-logo" style={{ marginBottom: "8px" }}>
+                  <div className="intro-logo-dot" />
+                  <span className="intro-logo-text">ADMIN</span>
+                </div>
+                <h2 className="block-title" style={{ marginBottom: "0" }}>Diagnósticos recebidos</h2>
+              </div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <Button variant="secondary" onClick={() => setView("trash")} style={{ position: "relative" }}>
+                  <span style={{ marginRight: "6px" }}>🗑</span>
+                  Lixeira
+                  {trashResponses.length > 0 && (
+                    <span style={{ 
+                      marginLeft: "8px", background: "var(--accent)", color: "white", 
+                      borderRadius: "10px", padding: "2px 8px", fontSize: "11px", fontWeight: "bold" 
+                    }}>
+                      {trashResponses.length}
+                    </span>
+                  )}
+                </Button>
+                <Button variant="secondary" onClick={exportCSV}>Exportar CSV</Button>
+              </div>
             </div>
-            <h2 className="block-title" style={{ marginBottom: "0" }}>Diagnósticos recebidos</h2>
-          </div>
-          <Button variant="secondary" onClick={exportCSV}>Exportar CSV</Button>
-        </div>
 
-        <div className="stats-row">
-          <div className="stat-card">
-            <div className="stat-num">{responses.length}</div>
-            <div className="stat-label">Total de diagnósticos</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-num">{todayCount}</div>
-            <div className="stat-label">Recebidos hoje</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-num">{weekCount}</div>
-            <div className="stat-label">Esta semana</div>
-          </div>
-        </div>
-
-        <div className="table-container">
-          {responses.length === 0 ? (
-            <div className="empty-state">
-              <div style={{ color: "var(--text-hint)", fontSize: "24px", marginBottom: "8px" }}>—</div>
-              <div className="empty-text">Nenhum diagnóstico recebido ainda.</div>
-              <div className="empty-sub">As respostas aparecerão aqui assim que forem enviadas.</div>
+            <div className="stats-row">
+              <div className="stat-card">
+                <div className="stat-num">{activeResponses.length}</div>
+                <div className="stat-label">Total de diagnósticos</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-num">{todayCount}</div>
+                <div className="stat-label">Recebidos hoje</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-num">{weekCount}</div>
+                <div className="stat-label">Esta semana</div>
+              </div>
             </div>
-          ) : (
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Empresa</th>
-                  <th>Responsável</th>
-                  <th>Produto / Serviço</th>
-                  <th>Data</th>
-                  <th>Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {responses.map((r, i) => (
-                  <tr key={r.id} onClick={() => setSelectedResponse(r)}>
-                    <td style={{ color: "var(--text-muted)" }}>{responses.length - i}</td>
-                    <td className="col-empresa">{r.company || "—"}</td>
-                    <td className="col-resp">{r.name || "—"}</td>
-                    <td className="col-resp" style={{ maxWidth: "200px" }}>
-                      <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {r.product || "—"}
-                      </div>
-                    </td>
-                    <td className="col-data">
-                      {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString("pt-BR") : "—"}
-                    </td>
-                    <td>
-                      <span className="badge-ver">Ver</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+
+            <div className="table-container">
+              {activeResponses.length === 0 ? (
+                <div className="empty-state">
+                  <div style={{ color: "var(--text-hint)", fontSize: "24px", marginBottom: "8px" }}>—</div>
+                  <div className="empty-text">Nenhum diagnóstico recebido ainda.</div>
+                  <div className="empty-sub">As respostas aparecerão aqui assim que forem enviadas.</div>
+                </div>
+              ) : (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Empresa</th>
+                      <th>Responsável</th>
+                      <th>Produto / Serviço</th>
+                      <th>Data</th>
+                      <th>Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeResponses.map((r, i) => (
+                      <tr key={r.id} style={{ cursor: "default" }}>
+                        <td style={{ color: "var(--text-muted)" }}>{activeResponses.length - i}</td>
+                        <td className="col-empresa" onClick={() => setSelectedResponse(r)} style={{ cursor: "pointer" }}>{r.company || "—"}</td>
+                        <td className="col-resp" onClick={() => setSelectedResponse(r)} style={{ cursor: "pointer" }}>{r.name || "—"}</td>
+                        <td className="col-resp" style={{ maxWidth: "200px", cursor: "pointer" }} onClick={() => setSelectedResponse(r)}>
+                          <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {r.product || "—"}
+                          </div>
+                        </td>
+                        <td className="col-data" onClick={() => setSelectedResponse(r)} style={{ cursor: "pointer" }}>
+                          {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString("pt-BR") : "—"}
+                        </td>
+                        <td style={{ position: "relative" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span className="badge-ver" onClick={() => setSelectedResponse(r)} style={{ cursor: "pointer" }}>Ver</span>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(openMenuId === r.id ? null : r.id);
+                              }}
+                              style={{ 
+                                background: "none", border: "none", color: "var(--text-muted)", 
+                                fontSize: "18px", cursor: "pointer", padding: "0 4px" 
+                              }}
+                            >
+                              ⋯
+                            </button>
+                          </div>
+                          
+                          {openMenuId === r.id && (
+                            <div className="dropdown-menu" style={{
+                              position: "absolute", right: "0", top: "100%", zIndex: 50,
+                              background: "var(--bg-card)", border: "1px solid var(--border)",
+                              borderRadius: "8px", padding: "4px", minWidth: "160px",
+                              boxShadow: "0 10px 25px rgba(0,0,0,0.5)"
+                            }}>
+                              <div 
+                                onClick={() => moveToTrash(r.id)}
+                                style={{ 
+                                  padding: "8px 14px", fontSize: "14px", cursor: "pointer", 
+                                  borderRadius: "6px", color: "#f87171" 
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                              >
+                                Mover para lixeira
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="admin-header">
+              <div>
+                <Button variant="secondary" onClick={() => setView("active")} style={{ marginBottom: "16px" }}>← Voltar</Button>
+                <h2 className="block-title" style={{ marginBottom: "4px" }}>Lixeira</h2>
+                <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>Itens aqui podem ser recuperados ou deletados permanentemente</p>
+              </div>
+            </div>
+
+            <div className="table-container" style={{ marginTop: "24px" }}>
+              {trashResponses.length === 0 ? (
+                <div className="empty-state">
+                  <div style={{ color: "var(--text-hint)", fontSize: "24px", marginBottom: "8px" }}>🗑</div>
+                  <div className="empty-text">Nenhum item na lixeira.</div>
+                </div>
+              ) : (
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Empresa</th>
+                      <th>Responsável</th>
+                      <th>Data</th>
+                      <th style={{ textAlign: "right" }}>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trashResponses.map((r, i) => (
+                      <tr key={r.id}>
+                        <td style={{ color: "var(--text-muted)" }}>{trashResponses.length - i}</td>
+                        <td>{r.company || "—"}</td>
+                        <td>{r.name || "—"}</td>
+                        <td>{r.submittedAt ? new Date(r.submittedAt).toLocaleDateString("pt-BR") : "—"}</td>
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                            <button 
+                              onClick={() => restoreFromTrash(r.id)}
+                              style={{ 
+                                background: "var(--accent-dim)", color: "var(--accent)", 
+                                border: "none", borderRadius: "6px", padding: "6px 12px", 
+                                fontSize: "13px", fontWeight: "500", cursor: "pointer" 
+                              }}
+                            >
+                              Recuperar
+                            </button>
+                            <button 
+                              onClick={() => setConfirmDeleteId(r.id)}
+                              style={{ 
+                                background: "rgba(239,68,68,0.1)", color: "#f87171", 
+                                border: "none", borderRadius: "6px", padding: "6px 12px", 
+                                fontSize: "13px", fontWeight: "500", cursor: "pointer" 
+                              }}
+                            >
+                              Deletar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* MODAL */}
+      {/* CONFIRM PERMANENT DELETE MODAL */}
+      {confirmDeleteId !== null && (
+        <div className="modal-overlay">
+          <div className="modal-box" style={{ maxWidth: "420px" }}>
+            <h2 className="modal-title" style={{ fontSize: "22px", marginBottom: "12px" }}>Deletar permanentemente?</h2>
+            <p className="modal-sub" style={{ marginBottom: "28px", lineHeight: "1.6" }}>
+              Esta ação não pode ser desfeita. O diagnóstico de <strong>{responses.find(r => r.id === confirmDeleteId)?.company || "esta empresa"}</strong> será removido para sempre.
+            </p>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+              <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Cancelar</Button>
+              <button 
+                onClick={() => permanentDelete(confirmDeleteId!)}
+                style={{ 
+                  background: "#ef4444", color: "white", border: "none", 
+                  borderRadius: "8px", padding: "10px 24px", fontWeight: "500", cursor: "pointer" 
+                }}
+              >
+                Deletar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DETAIL MODAL */}
       {selectedResponse && (
         <div className="modal-overlay">
           <div className="modal-box">
             <button className="modal-close" onClick={() => setSelectedResponse(null)}>✕</button>
             
-            <h2 className="modal-title">{selectedResponse.company || "Sem nome"}</h2>
+            <h2 className="modal-title">{selectedResponse.empresa || "Sem nome"}</h2>
             <p className="modal-sub">
-              {selectedResponse.name || ""} — {selectedResponse.submittedAt ? new Date(selectedResponse.submittedAt).toLocaleString("pt-BR") : ""}
+              {selectedResponse.nome || ""} — {selectedResponse.submittedAt ? new Date(selectedResponse.submittedAt).toLocaleString("pt-BR") : ""}
             </p>
 
             {Object.entries(BLOCKS).map(([blockName, keys]) => {

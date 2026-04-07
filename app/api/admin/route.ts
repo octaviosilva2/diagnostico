@@ -26,6 +26,7 @@ export async function POST(request: Request) {
         product: row.product_service,
         answers: row.answers ? JSON.parse(row.answers as string) : {},
         submittedAt: row.created_at,
+        deletedAt: row.deleted_at,
       }))
     });
   } catch (error) {
