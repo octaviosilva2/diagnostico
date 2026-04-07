@@ -15,11 +15,15 @@ export async function POST(request: Request) {
       success: true, 
       responses: result.rows.map(row => ({
         id: row.id,
+        empresa: row.company_name,
+        nome: row.contact_name,
+        produto: row.product_service,
+        tamanho: row.employees,
+        tempo: row.years_existing,
+        // Legacy keys for index table
         company: row.company_name,
         name: row.contact_name,
         product: row.product_service,
-        employees: row.employees,
-        years: row.years_existing,
         answers: row.answers ? JSON.parse(row.answers as string) : {},
         submittedAt: row.created_at,
       }))

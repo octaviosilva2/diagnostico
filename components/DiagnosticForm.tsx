@@ -89,11 +89,45 @@ export function DiagnosticForm() {
 
   const submitForm = async () => {
     try {
+      // Process answers to concatenate conditional texts
+      const processedAnswers = { ...data.answers };
+      
+      const conditionalMappings: Record<string, { condId: string, triggers: string[] }> = {
+        q1: { condId: "cond_q1", triggers: ["Outro"] },
+        q2: { condId: "cond_q2", triggers: ["Outro"] },
+        q6: { condId: "cond_q6", triggers: ["Sim, com certeza", "Provavelmente sim"] },
+        q8: { condId: "cond_q8", triggers: ["Outro"] },
+        q9: { condId: "cond_q9", triggers: ["Sim", "Às vezes"] },
+        q11: { condId: "cond_q11", triggers: ["Outro"] },
+        q13: { condId: "cond_q13", triggers: ["Outro"] },
+        q14: { condId: "cond_q14", triggers: ["Sim e funcionou bem", "Sim mas não deu certo"] },
+        q19: { condId: "cond_q19", triggers: ["Outro"] },
+        q24: { condId: "cond_q24", triggers: ["Sim, já tentei"] }
+      };
+
+      Object.entries(conditionalMappings).forEach(([qId, config]) => {
+        const answer = processedAnswers[qId];
+        const condText = data.conditionals[config.condId];
+        
+        if (answer && condText && condText.trim() !== "") {
+          if (Array.isArray(answer)) {
+            processedAnswers[qId] = answer.map(opt => 
+              config.triggers.includes(opt) ? `${opt} — ${condText.trim()}` : opt
+            );
+          } else {
+            if (config.triggers.includes(answer as string)) {
+              processedAnswers[qId] = `${answer} — ${condText.trim()}`;
+            }
+          }
+        }
+      });
+
       const res = await fetch("/api/responses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
+          answers: processedAnswers,
           submittedAt: new Date().toISOString()
         }),
       });

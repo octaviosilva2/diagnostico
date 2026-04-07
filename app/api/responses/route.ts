@@ -6,16 +6,12 @@ export async function POST(request: Request) {
     const data = await request.json();
     await initDb();
 
-    const { empresa, nome, produto, tamanho, tempo, answers, conditionals } = data;
-
-    // Combine conditionals into answers for easy storage
-    const finalAnswers = { ...answers, ...conditionals };
+    const { empresa, nome, produto, tamanho, tempo, answers } = data;
 
     await client.execute({
       sql: `INSERT INTO responses (company_name, contact_name, product_service, employees, years_existing, answers) 
             VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [empresa || "", nome || "", produto || "", tamanho || "", tempo || "", JSON.stringify(finalAnswers)],
-
+      args: [empresa || "", nome || "", produto || "", tamanho || "", tempo || "", JSON.stringify(answers)],
     });
 
     return NextResponse.json({ success: true });
